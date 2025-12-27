@@ -1,0 +1,163 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Surviver Block</title>
+<style>
+*{box-sizing:border-box;}
+body{margin:0;background:radial-gradient(circle,#0f2027,#000);color:white;font-family:Arial;overflow:hidden;}
+#ui{position:fixed;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:12px;font-size:16px;z-index:10;}
+button{padding:6px 10px;border:none;border-radius:8px;cursor:pointer;font-weight:bold;}
+#game{width:420px;height:600px;margin:80px auto;background:rgba(255,255,255,.06);border-radius:14px;position:relative;overflow:hidden;box-shadow:0 0 40px black;}
+.block{width:70px;height:35px;position:absolute;border-radius:8px;cursor:pointer;animation:pop .2s ease;}
+@keyframes pop{from{transform:scale(.7)}to{transform:scale(1)}}
+.hit{animation:hit .15s;}
+@keyframes hit{from{filter:brightness(2)}to{filter:brightness(1)}}
+.skin-normal{background:linear-gradient(45deg,#6a11cb,#2575fc);}
+.skin-fire{background:linear-gradient(45deg,#ff512f,#dd2476);}
+.skin-ice{background:linear-gradient(45deg,#00c6ff,#0072ff);}
+.skin-neon{background:linear-gradient(45deg,#00ffcc,#00ff00);}
+.boss{width:170px;height:65px;background:linear-gradient(45deg,#ff0000,#550000);border-radius:14px;position:absolute;left:125px;top:-90px;text-align:center;line-height:65px;font-weight:bold;font-size:18px;cursor:pointer;animation:shake .4s infinite alternate;}
+@keyframes shake{from{transform:translateX(-3px)}to{transform:translateX(3px)}}
+#shop{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);background:#111;padding:10px;border-radius:12px;display:none;gap:8px;z-index:10;}
+#ad{position:fixed;bottom:0;width:100%;background:#222;text-align:center;padding:8px;font-size:14px;color:#aaa;}
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="score">Score: 0</div>
+  <div id="coins">Coins: 0</div>
+  <div id="level">Level: 1</div>
+  <div id="lives">Lives: 3</div>
+  <button onclick="toggleShop()">🛒</button>
+</div>
+
+<div id="game"></div>
+
+<div id="shop">
+  <button onclick="buySkin('fire',100)">🔥 Fire (100)</button>
+  <button onclick="buySkin('ice',200)">❄ Ice (200)</button>
+  <button onclick="buySkin('neon',400)">⚡ Neon (400)</button>
+</div>
+
+<div id="ad">📢 AD PLACE</div>
+
+<script>
+// ---- Variables ----
+const game=document.getElementById("game");
+const scoreEl=document.getElementById("score");
+const coinsEl=document.getElementById("coins");
+const levelEl=document.getElementById("level");
+const livesEl=document.getElementById("lives");
+const shop=document.getElementById("shop");
+
+let score=0,coins=0,lives=3,level=1;
+let gravity=0.08;
+let spawnRate=1800;
+let blocks=[];
+let skin="normal";
+let bossActive=false,bossHP=0;
+
+// ---- Save/Load ----
+function saveGame(){
+  localStorage.setItem("surviverBlock",JSON.stringify({score,coins,lives,level,skin}));
+}
+function loadGame(){
+  const d=localStorage.getItem("surviverBlock");
+  if(d){
+    const s=JSON.parse(d);
+    score=s.score; coins=s.coins;
+    lives=s.lives; level=s.level;
+    skin=s.skin;
+  }
+}
+loadGame();
+
+// ---- UI Update ----
+function updateUI(){
+  scoreEl.textContent="Score: "+score;
+  coinsEl.textContent="Coins: "+coins;
+  livesEl.textContent="Lives: "+lives;
+  levelEl.textContent="Level: "+level;
+}
+updateUI();
+
+// ---- Shop ----
+function toggleShop(){
+  shop.style.display=shop.style.display==="flex"?"none":"flex";
+}
+function buySkin(name,price){
+  if(coins>=price){coins-=price;skin=name;saveGame();updateUI();alert("Skin اتفعل 🔥");}
+  else alert("Coins مش كفاية 😅");
+}
+
+// ---- Spawn Blocks ----
+function spawnBlock(){
+  if(bossActive) return;
+  const b=document.createElement("div");
+  b.className="block skin-"+skin;
+  b.style.left=Math.random()*(game.clientWidth-70)+"px";
+  b.style.top="-40px";
+  game.appendChild(b);
+
+  const block={el:b,y:-40,vy:0,start:false};
+  blocks.push(block);
+  setTimeout(()=>{block.start=true;},500);
+
+  b.onclick=()=>{
+    score+=10;coins+=5;b.classList.add("hit");
+    setTimeout(()=>b.remove(),50);
+    blocks=blocks.filter(x=>x!==block);
+    checkLevel();updateUI();saveGame();
+  };
+}
+
+// ---- Boss ----
+function spawnBoss(){
+  bossActive=true;bossHP=5+level;
+  const boss=document.createElement("div");
+  boss.className="boss";boss.textContent="BOSS ❤️ "+bossHP;
+  game.appendChild(boss);
+  let y=-90,vy=0.1;
+  boss.onclick=()=>{
+    bossHP--;boss.textContent="BOSS ❤️ "+bossHP;boss.classList.add("hit");
+    score+=20;coins+=10;updateUI();
+    if(bossHP<=0){boss.remove();bossActive=false;score+=200;coins+=100;updateUI();saveGame();}
+  };
+  function move(){
+    if(!bossActive) return;
+    vy+=gravity*0.3;y+=vy;boss.style.top=y+"px";
+    if(y>game.clientHeight){boss.remove();bossActive=false;lives--;updateUI();saveGame();if(lives<=0) gameOver();}
+    else requestAnimationFrame(move);
+  }
+  move();
+}
+
+// ---- Level ----
+function checkLevel(){
+  if(score>level*200){
+    level++;gravity+=0.02;spawnRate=Math.max(700,spawnRate-100);
+    if(level%5===0) spawnBoss();
+    updateUI();
+  }
+}
+
+// ---- Game Loop ----
+function update(){
+  blocks.forEach(block=>{
+    if(!block.start) return;
+    block.vy+=gravity;block.y+=block.vy;block.el.style.top=block.y+"px";
+    if(block.y>game.clientHeight){block.el.remove();blocks=blocks.filter(x=>x!==block);lives--;updateUI();saveGame();if(lives<=0) gameOver();}
+  });
+  requestAnimationFrame(update);
+}
+
+// ---- Game Over ----
+function gameOver(){localStorage.removeItem("surviverBlock");alert("🔥 GAME OVER 🔥\\nScore: "+score+"\\nLevel: "+level);location.reload();}
+
+// ---- Start ----
+setInterval(spawnBlock,spawnRate);
+update();
+</script>
+</body>
+</html>
